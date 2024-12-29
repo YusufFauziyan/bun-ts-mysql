@@ -12,8 +12,9 @@ import {
 // all users
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const users = await getUsers(); // Fungsi untuk mengambil data pengguna dari database
-    res.status(200).json(users); // Mengirimkan respons dengan status 200 dan data pengguna
+    const users = await getUsers();
+    const usersWithoutPassword = users.map(({ password, ...user }) => user);
+    res.status(200).json(usersWithoutPassword);
   } catch (error) {
     console.error("Error retrieving users:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -22,11 +23,12 @@ export const getAllUsers = async (req: Request, res: Response) => {
 
 // user by id
 export const getUser = async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id); // Mengambil id dari parameter URL
+  const id = req.params.id; // Mengambil id dari parameter URL
   try {
     const user = await getUserById(id); // Fungsi untuk mengambil data pengguna berdasarkan id
     if (user) {
-      res.status(200).json(user); // Mengirimkan respons dengan status 200 dan data pengguna
+      const { password, ...userWithoutPassword } = user;
+      res.status(200).json(userWithoutPassword); // Mengirimkan respons dengan status 200 dan data pengguna
     } else {
       res.status(404).json({ message: "User not found" }); // Mengirimkan respons dengan status 404 jika pengguna tidak ditemukan
     }
@@ -38,7 +40,7 @@ export const getUser = async (req: Request, res: Response) => {
 
 // post user
 export const createUser = async (req: Request, res: Response) => {
-  const user = req.body; // Mengambil data pengguna dari body request
+  const { password, ...user } = req.body; // Mengambil data pengguna dari body request
 
   try {
     // check if user exists
@@ -47,7 +49,7 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Email already exists" }); // Mengirimkan respons dengan status 400 jika pengguna sudah ada
     }
 
-    const newUser = await postUser(user); // Fungsi untuk menambahkan data pengguna ke database
+    const newUser = await postUser({ password, ...user }); // Fungsi untuk menambahkan data pengguna ke database
     res.status(201).json({ id: newUser, ...user }); // Mengirimkan respons dengan status 201 dan data pengguna yang ditambahkan
   } catch (error) {
     console.error("Error retrieving user:", error);
@@ -55,8 +57,9 @@ export const createUser = async (req: Request, res: Response) => {
   }
 };
 
+// Edit User
 export const updateUser = async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id); // Mengambil id dari parameter URL
+  const id = req.params.id; // Mengambil id dari parameter URL
   const user = req.body; // Mengambil data pengguna dari body request
 
   try {
@@ -73,7 +76,12 @@ export const updateUser = async (req: Request, res: Response) => {
     }
 
     const updatedUser = await updateUserById(id, user); // Fungsi untuk mengupdate data pengguna berdasarkan id
-    res.status(200).json(updatedUser); // Mengirimkan respons dengan status 200 dan data pengguna yang diupdate
+    if (!updatedUser) {
+      return res.status(500).json({ message: "Error updating user" }); // Mengirimkan respons dengan status
+    }
+
+    const { password, ...userWithoutPassword } = updatedUser;
+    res.status(200).json(userWithoutPassword); // Mengirimkan respons dengan status 200 dan data pengguna yang diupdate
   } catch (error) {
     console.error("Error updating user:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -81,7 +89,7 @@ export const updateUser = async (req: Request, res: Response) => {
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id); // Mengambil id dari parameter URL
+  const id = req.params.id; // Mengambil id dari parameter URL
 
   try {
     const userExists = await getUserById(id); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
