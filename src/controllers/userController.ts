@@ -2,19 +2,41 @@
 import { Request, Response } from "express";
 import {
   getUsers,
-  getUserById,
+  getUserByIdModel,
   postUser,
   updateUserById,
   deleteUserById,
   checkUserExists,
 } from "../models/userModel"; // Pastikan model Anda benar
 
-// all users
-export const getAllUsers = async (req: Request, res: Response) => {
+// Fetch all users or the logged-in user's data based on their role
+export const getAllUsers = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    const users = await getUsers();
-    const usersWithoutPassword = users.map(({ password, ...user }) => user);
-    res.status(200).json(usersWithoutPassword);
+    const loggedInUser = (req as any).user;
+
+    if (!loggedInUser) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    if (loggedInUser.role === "admin") {
+      const users = await getUsers();
+      const usersWithoutPassword = users.map(({ password, ...user }) => user);
+      res.status(200).json(usersWithoutPassword);
+      return;
+    }
+
+    const user = await getUserByIdModel(loggedInUser.id);
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const { password, ...userWithoutPassword } = user;
+    res.status(200).json(userWithoutPassword);
   } catch (error) {
     console.error("Error retrieving users:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -25,9 +47,9 @@ export const getAllUsers = async (req: Request, res: Response) => {
 export const getUser = async (req: Request, res: Response) => {
   const id = req.params.id; // Mengambil id dari parameter URL
   try {
-    const user = await getUserById(id); // Fungsi untuk mengambil data pengguna berdasarkan id
+    const user = await getUserByIdModel(id); // Fungsi untuk mengambil data pengguna berdasarkan id
     if (user) {
-      const { password, ...userWithoutPassword } = user;
+      const { password, refresh_token, ...userWithoutPassword } = user;
       res.status(200).json(userWithoutPassword); // Mengirimkan respons dengan status 200 dan data pengguna
     } else {
       res.status(404).json({ message: "User not found" }); // Mengirimkan respons dengan status 404 jika pengguna tidak ditemukan
@@ -46,7 +68,8 @@ export const createUser = async (req: Request, res: Response) => {
     // check if user exists
     const userExists = await checkUserExists(user.email); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
     if (userExists) {
-      return res.status(400).json({ message: "Email already exists" }); // Mengirimkan respons dengan status 400 jika pengguna sudah ada
+      res.status(400).json({ message: "Email already exists" });
+      return;
     }
 
     const newUser = await postUser({ password, ...user }); // Fungsi untuk menambahkan data pengguna ke database
@@ -66,21 +89,24 @@ export const updateUser = async (req: Request, res: Response) => {
     // check email exists
     const emailExists = await checkUserExists(user.email); // Fungsi untuk memeriksa apakah email pengguna sudah ada di database
     if (emailExists) {
-      return res.status(400).json({ message: "Email already exists" }); // Mengirimkan respons dengan status 400 jika email pengguna sudah ada
+      res.status(400).json({ message: "Email already exists" });
+      return;
     }
 
     // check if user exists
-    const userExists = await getUserById(id); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
+    const userExists = await getUserByIdModel(id); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
     if (!userExists) {
-      return res.status(404).json({ message: "User not found" }); // Mengirimkan respons dengan status 404 jika pengguna tidak ditemukan
+      res.status(404).json({ message: "User not found" });
+      return;
     }
 
     const updatedUser = await updateUserById(id, user); // Fungsi untuk mengupdate data pengguna berdasarkan id
     if (!updatedUser) {
-      return res.status(500).json({ message: "Error updating user" }); // Mengirimkan respons dengan status
+      res.status(500).json({ message: "Error updating user" });
+      return;
     }
 
-    const { password, ...userWithoutPassword } = updatedUser;
+    const { password, refresh_token, ...userWithoutPassword } = updatedUser;
     res.status(200).json(userWithoutPassword); // Mengirimkan respons dengan status 200 dan data pengguna yang diupdate
   } catch (error) {
     console.error("Error updating user:", error);
@@ -92,9 +118,10 @@ export const deleteUser = async (req: Request, res: Response) => {
   const id = req.params.id; // Mengambil id dari parameter URL
 
   try {
-    const userExists = await getUserById(id); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
+    const userExists = await getUserByIdModel(id); // Fungsi untuk memeriksa apakah pengguna sudah ada di database
     if (!userExists) {
-      return res.status(404).json({ message: "User not found" }); // Mengirimkan respons dengan status 404 jika pengguna tidak ditemukan
+      res.status(404).json({ message: "User not found" });
+      return;
     }
 
     const deleted = await deleteUserById(id); // Fungsi untuk menghapus data pengguna berdasarkan id

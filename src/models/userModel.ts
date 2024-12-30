@@ -18,7 +18,7 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 // get user by id
-export const getUserById = async (id: string): Promise<User | null> => {
+export const getUserByIdModel = async (id: string): Promise<User | null> => {
   const query = "SELECT * FROM User WHERE user_id = ?";
   const [rows] = await db.query<User[]>(query, [id]);
   return rows.length ? rows[0] : null;
@@ -83,4 +83,22 @@ export const getUserByEmail = async (email: string) => {
   const query = "SELECT * FROM User WHERE email = ?";
   const [rows] = await db.execute<User[]>(query, [email]);
   return rows[0];
+};
+
+// Save refresh token for a user
+export const saveRefreshToken = async (
+  userId: string,
+  refreshToken: string
+) => {
+  const query = "UPDATE User SET refresh_token = ? WHERE user_id = ?";
+  await db.execute(query, [refreshToken, userId]);
+};
+
+// Retrieve refresh token for a user
+export const getRefreshToken = async (
+  userId: string
+): Promise<string | null> => {
+  const query = "SELECT refresh_token FROM User WHERE user_id = ?";
+  const [rows] = await db.execute<User[]>(query, [userId]);
+  return rows[0]?.refresh_token || null;
 };

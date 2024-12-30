@@ -1,38 +1,100 @@
 import { Request, Response } from "express";
-import { getUserByEmail } from "../models/userModel";
+import {
+  getRefreshToken,
+  getUserByEmail,
+  saveRefreshToken,
+} from "../models/userModel";
 import { comparePassword } from "../utils/passwordUtils";
-import { generateToken } from "../utils/jwtUtils";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+} from "../utils/jwtUtils";
 
-// Controller untuk login
+// Controller for login
 export const loginUser = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
+      res.status(400).json({ message: "Email and password are required" });
+      return;
     }
 
     const user = await getUserByEmail(email);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      res.status(404).json({ message: "User not found" });
+      return;
     }
 
     const isPasswordValid = await comparePassword(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
     }
 
     // generate token
-    const token = generateToken({ id: user.user_id, email: user.email });
+    const accessToken = generateAccessToken({
+      id: user.user_id,
+      email: user.email,
+      role: user.role,
+    });
+    const refreshToken = generateRefreshToken({
+      id: user.user_id,
+      email: user.email,
+      role: user.role,
+    });
 
-    const { password: userPassword, ...userWithoutPassword } = user;
+    await saveRefreshToken(user.user_id, refreshToken);
 
-    res
-      .status(200)
-      .json({ message: "Login successful", user: userWithoutPassword, token });
+    const {
+      password: userPassword,
+      refresh_token: userRefreshToken,
+      ...userWithoutPassword
+    } = user;
+
+    res.status(200).json({
+      message: "Login successful",
+      user: userWithoutPassword,
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
     res.status(500).json({ message: "Error logging in", error });
+  }
+};
+
+// Controller for refresh token
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+
+  // Check if refresh token is provided
+  if (!refreshToken) {
+    res.status(400).json({ message: "Refresh token is required" });
+    return;
+  }
+
+  try {
+    // Verify the provided refresh token
+    const decoded = verifyRefreshToken(refreshToken) as any;
+
+    // Check if the refresh token matches the one stored in the database
+    const storedRefreshToken = await getRefreshToken(decoded.id);
+    if (storedRefreshToken !== refreshToken) {
+      res.status(403).json({ message: "Invalid refresh token" });
+      return;
+    }
+
+    // Generate a new access token
+    const newAccessToken = generateAccessToken({
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
+    });
+
+    res.status(200).json({ accessToken: newAccessToken });
+  } catch (error) {
+    console.error("Error refreshing access token:", error);
+    res.status(401).json({ message: "Invalid or expired refresh token" });
   }
 };
