@@ -6,34 +6,16 @@ import {
   updateUser,
   deleteUser,
 } from "../controllers/userController";
-import { loginUser, refreshAccessToken } from "../controllers/authController";
 import { authenticateToken } from "../middleware/authMiddleware";
 import { authorizeAdmin } from "../middleware/roleMiddleware";
 
 const router = Router();
 
-// auth
-router.post("/auth/login", loginUser);
-router.post("/auth/register", createUser);
-
-// refresh token
-router.post("/refresh-token", refreshAccessToken);
-
 // Collection Users
-router.get("/collection/users", authenticateToken, getAllUsers);
-router.get("/collection/user/:id", authenticateToken, authorizeAdmin, getUser);
-router.post("/collection/user", createUser);
-router.put(
-  "/collection/user/:id",
-  authenticateToken,
-  authorizeAdmin,
-  updateUser
-);
-router.delete(
-  "/collection/user/:id",
-  authenticateToken,
-  authorizeAdmin,
-  deleteUser
-);
+router.get("/users", authenticateToken, getAllUsers);
+router.get("/user/:id", authenticateToken, authorizeAdmin, getUser);
+router.post("/user", createUser);
+router.put("/user/:id", authenticateToken, authorizeAdmin, updateUser);
+router.delete("/user/:id", authenticateToken, authorizeAdmin, deleteUser);
 
 export default router;

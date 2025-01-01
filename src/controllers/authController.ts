@@ -3,6 +3,8 @@ import {
   getRefreshToken,
   getUserByEmail,
   saveRefreshToken,
+  postUser,
+  getUserByIdModel,
 } from "../models/userModel";
 import { comparePassword } from "../utils/passwordUtils";
 import {
@@ -10,6 +12,7 @@ import {
   generateRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwtUtils";
+import { verifyGoogleToken } from "../utils/googleAuth";
 
 // Controller for login
 export const loginUser = async (req: Request, res: Response) => {
@@ -96,5 +99,54 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error refreshing access token:", error);
     res.status(401).json({ message: "Invalid or expired refresh token" });
+  }
+};
+
+// Login with Google
+export const loginWithGoogle = async (req: Request, res: Response) => {
+  const { token } = req.body;
+
+  if (!token) {
+    res.status(400).json({ message: "Google token is required" });
+    return;
+  }
+
+  try {
+    const { email, name } = await verifyGoogleToken(token);
+    let user = await getUserByEmail(email);
+
+    if (!user) {
+      const newUserData = {
+        username: name,
+        email,
+        verified_email: true,
+        password: "", // Empty password for Google users
+      };
+
+      const userId = await postUser(newUserData as any);
+      user = await getUserByIdModel(userId);
+
+      if (!user) {
+        res.status(500).json({ message: "Error creating user" });
+        return;
+      }
+    }
+
+    // generate token
+    const accessToken = generateAccessToken({
+      id: user.user_id,
+      email: user.email,
+      role: user.role,
+    });
+    const refreshToken = generateRefreshToken({
+      id: user.user_id,
+      email: user.email,
+      role: user.role,
+    });
+
+    res.status(200).json({ user, accessToken, refreshToken });
+  } catch (error) {
+    console.error("Error logging in with Google:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };

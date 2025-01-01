@@ -8,6 +8,9 @@ interface User extends RowDataPacket {
   username: string;
   email: string;
   password: string;
+  phone_number: string;
+  verified_phone_number: boolean;
+  verified_email: boolean;
 }
 
 // get all users
@@ -26,20 +29,21 @@ export const getUserByIdModel = async (id: string): Promise<User | null> => {
 
 // post user
 export const postUser = async (user: User): Promise<string> => {
-  const { username, email, password } = user;
+  const { username, email, password, verified_email } = user;
 
   // hash password
   const hashedPassword = await hashPassword(password);
 
   const userId = uuidv4();
   const query =
-    "INSERT INTO User (user_id, username, email, password) VALUES (?, ?, ?, ?)";
+    "INSERT INTO User (user_id, username, email, password, verified_email) VALUES (?, ?, ?, ?, ?)";
 
   await db.query<ResultSetHeader>(query, [
     userId,
     username,
     email,
     hashedPassword,
+    verified_email,
   ]);
 
   return userId;
@@ -79,10 +83,14 @@ export const checkUserExists = async (email: string): Promise<boolean> => {
 };
 
 // get user by email
-export const getUserByEmail = async (email: string) => {
+export const getUserByEmail = async (
+  email: string | undefined
+): Promise<User | null> => {
+  if (!email) return null;
+
   const query = "SELECT * FROM User WHERE email = ?";
-  const [rows] = await db.execute<User[]>(query, [email]);
-  return rows[0];
+  const [rows] = await db.query<User[]>(query, [email]);
+  return rows[0] || null;
 };
 
 // Save refresh token for a user
@@ -101,4 +109,29 @@ export const getRefreshToken = async (
   const query = "SELECT refresh_token FROM User WHERE user_id = ?";
   const [rows] = await db.execute<User[]>(query, [userId]);
   return rows[0]?.refresh_token || null;
+};
+
+// update verified phone number
+export const updateVerifiedPhoneNumber = async (
+  userId: string,
+  phoneNumber: string,
+  verifiedPhoneNumber: boolean
+): Promise<User | null> => {
+  const query =
+    "UPDATE User SET phone_number = ?, verified_phone_number = ? WHERE user_id = ?";
+  const [result] = await db.query<ResultSetHeader>(query, [
+    phoneNumber,
+    verifiedPhoneNumber,
+    userId,
+  ]);
+
+  if (!result.affectedRows) return null;
+
+  // Fetch the updated user
+  const [users] = await db.query<User[]>(
+    "SELECT * FROM User WHERE user_id = ?",
+    [userId]
+  );
+
+  return users[0] || null;
 };
